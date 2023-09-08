@@ -1,0 +1,66 @@
+name: Create Zip of each branch
+
+on:
+  # Triggers the workflow for new tags
+  push:
+    branches:
+      - '**'
+
+  # Allows you to run this workflow manually from the Actions tab
+  workflow_dispatch:
+  
+jobs:
+  build:
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get Branch name
+        run: echo "BRANCH_NAME=$(echo $GITHUB_REF | sed -e "s|^refs/heads/||" )" >> $GITHUB_ENV
+      - name: Display branch name
+        run: echo ${{ env.BRANCH_NAME }}
+      
+      # Read version number from addon.xml
+      - name: Get Version
+        run: echo "VERSION=$(cat addon.xml | grep "<addon" | grep -E -o "version=\"[0-9\.]+\"" | grep -E -o "[0-9\.]+" )" >> $GITHUB_ENV
+      - name: Display version
+        run: echo ${{ env.VERSION }}
+      
+      # Create Zip
+      - name: Zip Release
+        uses: thedoctor0/zip-release@master
+        with:
+          type: zip
+          filename: skin.quartz_${{ env.VERSION }}_${{ env.BRANCH_NAME }}.zip
+          directory: .
+          exclusions: '*.git*'
+
+      - name: Directory listing for debugging
+        run: ls -la
+
+      - name: Create or Update tag
+        run: |
+          git tag -f ${{ env.BRANCH_NAME }}_Release
+          git push -f origin ${{ env.BRANCH_NAME }}_Release
+
+      # Create Release
+      - name: Upload Release
+        uses: ncipollo/release-action@main
+        with:
+          name: skin.quartz ${{ env.VERSION }} (${{ env.BRANCH_NAME }})
+          tag: ${{ env.BRANCH_NAME }}_Release
+          allowUpdates: true
+          prerelease: false
+          removeArtifacts: true
+          replacesArtifacts: true
+          artifactErrorsFailBuild: true
+          artifacts: skin.quartz_${{ env.VERSION }}_${{ env.BRANCH_NAME }}.zip
+          artifactContentType: application/zip
+          token: ${{secrets.GITHUB_TOKEN}}
